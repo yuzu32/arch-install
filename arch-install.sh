@@ -139,6 +139,8 @@ rm -rf ~/.git
 
 CHROOT
 
-echo "[*] Installation done. Unmounting and rebooting..."
-umount -R /mnt
-reboot
+echo "[*] Installation done. dont forget to 'umount -R /mnt' then reboot"
+
+#echo "[*] Installation done. Unmounting and rebooting..."
+#umount -R /mnt
+#reboot
