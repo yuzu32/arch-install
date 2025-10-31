@@ -38,16 +38,21 @@ echo "[*] Partitioning disks..."
 sgdisk --zap-all /dev/nvme0n1
 sgdisk --zap-all /dev/nvme1n1
 
-# nvme0n1: 512M ESP + rest root
+# nvme0n1: 1G ESP + rest root
 parted -s /dev/nvme0n1 mklabel gpt \
-  mkpart primary fat32 1MiB 513MiB \
-  mkpart primary 513MiB 100% \
+  mkpart primary fat32 1MiB 1025MiB \
+  mkpart primary 1025MiB 100% \
   set 1 esp on
 
-# nvme1n1: 512M boot + rest root
+# nvme1n1: 1G boot + rest root
 parted -s /dev/nvme1n1 mklabel gpt \
-  mkpart primary ext4 1MiB 513MiB \
-  mkpart primary 513MiB 100%
+  mkpart primary ext4 1MiB 1025MiB \
+  mkpart primary 1025MiB 100%
+
+wipefs -a /dev/nvme0n1p1
+wipefs -a /dev/nvme0n1p2
+wipefs -a /dev/nvme1n1p1
+wipefs -a /dev/nvme1n1p2
 
 partprobe /dev/nvme0n1
 partprobe /dev/nvme1n1
@@ -55,13 +60,13 @@ sleep 2
 
 # RAID0 root
 echo "[*] Creating RAID0..."
-yes | mdadm --create --verbose --level=0 --metadata=1.2 --raid-devices=2 /dev/md/root /dev/nvme0n1p2 /dev/nvme1n1p2
+yes | mdadm --create --verbose --level=0 --metadata=1.2 --raid-devices=2 /dev/md/root /dev/nvme0n1p2 /dev/nvme1n1p2 || true
 
 # Wipe RAID0 partitions securely
-echo "[*] Securely wiping RAID0 partitions..."
-cryptsetup open --type plain --sector-size 4096 --key-file /dev/urandom /dev/md/root to_be_wiped
-dd if=/dev/zero of=/dev/mapper/to_be_wiped bs=1M status=progress
-cryptsetup close to_be_wiped
+#echo "[*] Securely wiping RAID0 partitions..."
+#cryptsetup open --type plain --sector-size 4096 --key-file /dev/urandom /dev/md/root to_be_wiped
+#dd if=/dev/zero of=/dev/mapper/to_be_wiped bs=1M status=progress || true
+#cryptsetup close to_be_wiped
 
 echo "[*] Creating LUKS on /dev/md/root..."
 echo -n "$LUKS_PASS" | cryptsetup -v luksFormat /dev/md/root -
@@ -82,7 +87,7 @@ mount /dev/nvme0n1p1 /mnt/boot/efi
 
 echo "[*] Installing base system..."
 pacman -Sy --noconfirm reflector
-reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+reflector --latest 50 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
 
 # Ensure a non rate-limited mirror is selected
 vim /etc/pacman.d/mirrorlist
@@ -112,8 +117,7 @@ sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard k
 mkinitcpio -P
 
 # grub
-sed -i 's/^#GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=\/dev\/md\/root:root"/' /etc/default/grub || \
-  echo 'GRUB_CMDLINE_LINUX="cryptdevice=/dev/md/root:root"' >> /etc/default/grub
+sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=\/dev\/md\/root:root"/' /etc/default/grub
 
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
