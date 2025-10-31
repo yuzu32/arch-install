@@ -9,6 +9,12 @@ set -euo pipefail
 # nvme0n1p2 + nvme1n1p2 -> RAID0 (LUKS root)
 # =========================
 
+# --- Ensure two disks exists ---
+if [[ ! -e /dev/nvme0n1 || ! -e /dev/nvme1n1 ]]; then
+    echo "[!] Both /dev/nvme0n1 and /dev/nvme1n1 must be present. Exiting."
+    exit 1
+fi
+
 # --- Prompt for LUKS password (with confirmation) ---
 while true; do
     echo "Enter LUKS password (input hidden):"
